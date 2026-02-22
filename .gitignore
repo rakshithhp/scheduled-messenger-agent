@@ -8,6 +8,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+*.pkg
+AWSCLIV2.pkg
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
