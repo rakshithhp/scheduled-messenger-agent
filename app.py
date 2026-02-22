@@ -120,6 +120,12 @@ def add_contact_api():
     return jsonify({"success": True, "alias": alias.lower(), "phone": phone})
 
 
+@app.route("/api/sent-messages")
+def api_sent_messages():
+    """Return sent messages as JSON for polling when SSE is unavailable."""
+    return jsonify(load_sent_messages())
+
+
 @app.route("/events")
 def events():
     """Server-Sent Events stream for real-time sent notifications."""

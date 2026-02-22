@@ -218,6 +218,15 @@
       </form>
       <div id="feedback" class="feedback"></div>
       <div id="sent-log"></div>
+      <div class="contact-list">
+        <h2>Your contacts</h2>
+        <p id="send-tab-contacts-empty" class="history-empty" {% if contacts %}style="display:none"{% endif %}>No contacts yet. Add some in the Contacts tab.</p>
+        <ul id="send-tab-contacts">
+          {% for alias, phone in contacts.items() %}
+          <li>{{ alias }}: {{ phone }}</li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
 
     <div id="panel-contacts" class="tab-panel">
@@ -267,13 +276,42 @@
     const contactsEmpty = document.getElementById('contacts-empty');
     const contactFeedback = document.getElementById('contact-feedback');
 
-    // Tab switching
+    // Tab switching + History tab polling
+    let historyPollInterval = null;
+    function refreshHistoryFromServer() {
+      fetch('/api/sent-messages')
+        .then(r => r.json())
+        .then(messages => {
+          if (!Array.isArray(messages) || messages.length === 0) {
+            if (historyEmpty) historyEmpty.style.display = 'block';
+            sentHistoryList.innerHTML = '';
+            return;
+          }
+          if (historyEmpty) historyEmpty.style.display = 'none';
+          sentHistoryList.innerHTML = messages.map(m => `
+            <li>
+              <span class="sent-meta">${m.sent_at} · ${m.contact_alias} (${m.phone})</span><br>
+              <span class="sent-msg">"${m.message}"</span>
+            </li>
+          `).join('');
+        })
+        .catch(() => {});
+    }
+
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+        if (tab.dataset.tab === 'history') {
+          refreshHistoryFromServer();
+          if (historyPollInterval) clearInterval(historyPollInterval);
+          historyPollInterval = setInterval(refreshHistoryFromServer, 5000);
+        } else {
+          if (historyPollInterval) clearInterval(historyPollInterval);
+          historyPollInterval = null;
+        }
       });
     });
 
@@ -344,6 +382,14 @@
         const li = document.createElement('li');
         li.innerHTML = `<span class="contact-alias">${data.alias}</span> <span class="contact-phone">${data.phone}</span>`;
         contactsList.appendChild(li);
+        const sendTabContacts = document.getElementById('send-tab-contacts');
+        const sendTabContactsEmpty = document.getElementById('send-tab-contacts-empty');
+        if (sendTabContacts) {
+          if (sendTabContactsEmpty) sendTabContactsEmpty.style.display = 'none';
+          const sendLi = document.createElement('li');
+          sendLi.textContent = `${data.alias}: ${data.phone}`;
+          sendTabContacts.appendChild(sendLi);
+        }
         document.getElementById('contact-alias').value = '';
         document.getElementById('contact-phone').value = '';
       } catch (err) {
@@ -387,15 +433,21 @@
       }
     });
 
-    // Listen for real-time "message sent" notifications
-    const evtSource = new EventSource('/events');
-    evtSource.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === 'sent') {
-        addSentNotification(data);
-      }
-    };
-    evtSource.onerror = () => evtSource.close();
+    // Listen for real-time "message sent" notifications (works when SSE is not buffered)
+    let evtSource = null;
+    try {
+      evtSource = new EventSource('/events');
+      evtSource.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'sent') {
+          addSentNotification(data);
+        }
+      };
+      evtSource.onerror = () => { if (evtSource) evtSource.close(); };
+    } catch (err) {
+      console.warn('SSE not available, using polling for history');
+    }
+
   </script>
 </body>
 </html>
