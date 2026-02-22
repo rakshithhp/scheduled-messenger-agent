@@ -8,3 +8,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

@@ -19,3 +19,6 @@ watchdog>=3.0.0
 
 # Web UI
 flask>=3.0.0
+
+# Production server (for AWS deployment)
+gunicorn>=21.0.0

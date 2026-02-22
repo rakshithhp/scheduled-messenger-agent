@@ -113,6 +113,8 @@ python main.py --dry-run "Send good night to wife in an hour"
 
 ```
 scheduled-messenger-agent/
+├── Procfile           # For AWS Elastic Beanstalk
+├── .platform/         # Nginx config for SSE on AWS
 ├── agent/
 │   ├── parser.py      # Natural language → structured task
 │   ├── contacts.py    # Alias → phone number storage
@@ -128,6 +130,10 @@ scheduled-messenger-agent/
 ├── requirements.txt
 └── .env               # Your secrets (from .env.example)
 ```
+
+## Deploy to AWS
+
+To host the app on AWS and access it via the web, see **[DEPLOY.md](DEPLOY.md)** for step-by-step instructions using Elastic Beanstalk.
 
 ## Future ideas
 
