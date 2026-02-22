@@ -1,0 +1,21 @@
+# Scheduled Messenger Agent
+# Python 3.10+
+
+# Natural language understanding
+openai>=1.0.0
+
+# Task scheduling
+apscheduler>=3.10.0
+
+# Message delivery - SMS
+twilio>=8.0.0
+boto3>=1.34.0  # Amazon SNS
+
+# Environment and config
+python-dotenv>=1.0.0
+
+# Optional: Run as a service with hot reload
+watchdog>=3.0.0
+
+# Web UI
+flask>=3.0.0

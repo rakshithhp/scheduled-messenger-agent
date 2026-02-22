@@ -1,0 +1,10 @@
+venv/
+.env
+contacts.json
+sent_messages.json
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
