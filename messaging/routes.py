@@ -1,5 +1,8 @@
 """API routes for conversations and messages (in-app chat)."""
 
+import threading
+from types import SimpleNamespace
+
 from flask import Blueprint, request, jsonify, g, current_app
 
 from agent.contacts import load_contacts
@@ -188,10 +191,117 @@ def _other_username_in_conversation(conversation_id: int, current_user_id: int) 
     return row["username"] if row else None
 
 
+def _send_message_heavy_work(
+    app,
+    conversation_id: int,
+    current_user_id: int,
+    raw_content: str,
+    other_username: str | None,
+) -> None:
+    """Run parse, expand, add_message, push and no_reply rules in a background thread (releases request thread)."""
+    with app.app_context():
+        try:
+            conversation_context = {"other_username": other_username} if other_username else None
+            parse_callback = app.config.get("parse_intent_callback")
+            schedule_from_parsed_callback = app.config.get("schedule_in_app_from_parsed_callback")
+            push_callback = app.config.get("push_message_to_ws_callback")
+            push_failed = app.config.get("push_message_failed_callback")
+            push_scheduled = app.config.get("push_message_scheduled_callback")
+
+            parsed = None
+            if parse_callback:
+                try:
+                    parsed = parse_callback(raw_content, conversation_context)
+                except Exception:
+                    app.logger.exception("parse intent")
+            if not parsed or not (getattr(parsed, "message", None) or "").strip():
+                parsed = None
+
+            content_to_send = (parsed.message or "").strip() if parsed and (parsed.message or "").strip() else raw_content
+            if conversation_context and (not content_to_send or content_to_send == raw_content):
+                content_to_send = expand_message_for_in_app(raw_content)
+            if not content_to_send:
+                content_to_send = raw_content
+
+            if parsed and schedule_from_parsed_callback:
+                delay = getattr(parsed, "delay_seconds", None) or 0
+                repeat_interval = getattr(parsed, "repeat_interval_seconds", None) or 0
+                repeat_duration = getattr(parsed, "repeat_duration_seconds", None) or 0
+                should_schedule = (delay is not None and delay > 0) or (repeat_interval > 0 and repeat_duration > 0)
+                if should_schedule:
+                    parsed_for_job = SimpleNamespace(
+                        message=content_to_send,
+                        contact_alias=getattr(parsed, "contact_alias", ""),
+                        delay_seconds=delay,
+                        scheduled_time=getattr(parsed, "scheduled_time"),
+                        raw_input=getattr(parsed, "raw_input", ""),
+                        repeat_interval_seconds=repeat_interval or None,
+                        repeat_duration_seconds=repeat_duration or None,
+                        repeat_stop_on_recipient_reply=getattr(parsed, "repeat_stop_on_recipient_reply", False),
+                    )
+                    scheduled = schedule_from_parsed_callback(parsed_for_job, conversation_id, current_user_id)
+                    if scheduled and push_scheduled:
+                        push_scheduled(current_user_id, conversation_id, {
+                            "send_at": scheduled.get("send_at"),
+                            "message": content_to_send,
+                            "raw_intent": raw_content,
+                            "repeat_count": scheduled.get("repeat_count"),
+                        })
+                    return
+
+            msg = add_message(conversation_id, current_user_id, content_to_send)
+            resolve_pending_reply_suggestions(conversation_id, current_user_id)
+
+            on_added = app.config.get("on_message_added_callback")
+            if on_added:
+                on_added(conversation_id, current_user_id, msg["id"], msg.get("content"))
+
+            participants = get_participant_ids(conversation_id)
+            other_id = next((p for p in participants if p != current_user_id), None)
+            if other_id is not None:
+                mark_follow_up_led_to_reply(conversation_id, other_id)
+
+            if push_callback:
+                push_callback(msg, conversation_id)
+            check_callback = app.config.get("check_repeat_stop_on_message_callback")
+            if check_callback:
+                check_callback(conversation_id, current_user_id, content_to_send)
+
+            if parsed and getattr(parsed, "trigger", None) == "no_reply":
+                schedule_timer = app.config.get("schedule_timer_elapsed_callback")
+                if schedule_timer:
+                    fixed_duration = getattr(parsed, "trigger_duration_seconds", None)
+                    if fixed_duration and fixed_duration > 0:
+                        delay_seconds = fixed_duration
+                    else:
+                        state = get_conversation_state(conversation_id, current_user_id)
+                        policy = intent_to_policy(getattr(parsed, "raw_input", "") or "", state)
+                        delay_seconds = compute_adaptive_delay_seconds(
+                            policy, state, default_fallback_seconds=14400
+                        )
+                    rule = create_rule(
+                        conversation_id,
+                        current_user_id,
+                        trigger="no_reply",
+                        trigger_duration_seconds=delay_seconds,
+                        trigger_since_message_id=msg["id"],
+                        action=getattr(parsed, "action", "generate_followup") or "generate_followup",
+                        tone=getattr(parsed, "tone", None),
+                        message_hint=(getattr(parsed, "message", None) or "follow up").strip() or "follow up",
+                        raw_intent=getattr(parsed, "raw_input", None),
+                    )
+                    schedule_timer(rule["id"], conversation_id, current_user_id, delay_seconds)
+        except Exception as e:
+            app.logger.exception("send_message background failed")
+            push_failed = app.config.get("push_message_failed_callback")
+            if push_failed:
+                push_failed(current_user_id, conversation_id, str(e))
+
+
 @bp.route("/conversations/<int:conversation_id>/messages", methods=["POST"])
 def send_message(conversation_id: int):
-    """Send a message. Body: { "content": "..." }. All content is treated as natural-language intent.
-    User defines intent → Agent decides when/how/whether to send (now vs scheduled).
+    """Send a message. Body: { "content": "..." }. Returns 202 immediately; actual send runs in background.
+    This keeps the request thread free so other operations (e.g. add contact) stay fast.
     """
     conv = get_conversation(conversation_id, g.current_user["id"])
     if not conv:
@@ -201,102 +311,17 @@ def send_message(conversation_id: int):
     if not raw_content:
         return jsonify({"error": "Message content is required"}), 400
 
-    other_username = _other_username_in_conversation(conversation_id, g.current_user["id"])
-    conversation_context = {"other_username": other_username} if other_username else None
+    current_user_id = g.current_user["id"]
+    other_username = _other_username_in_conversation(conversation_id, current_user_id)
+    app = current_app._get_current_object()
 
-    parse_callback = current_app.config.get("parse_intent_callback")
-    schedule_from_parsed_callback = current_app.config.get("schedule_in_app_from_parsed_callback")
-    push_callback = current_app.config.get("push_message_to_ws_callback")
+    threading.Thread(
+        target=_send_message_heavy_work,
+        args=(app, conversation_id, current_user_id, raw_content, other_username),
+        daemon=True,
+    ).start()
 
-    parsed = None
-    if parse_callback:
-        try:
-            parsed = parse_callback(raw_content, conversation_context)
-        except Exception:
-            current_app.logger.exception("parse intent")
-    if not parsed or not (getattr(parsed, "message", None) or "").strip():
-        parsed = None
-
-    # Resolve content: use parsed message when present; for in-app, expand if parser failed or returned raw
-    content_to_send = (parsed.message or "").strip() if parsed and (parsed.message or "").strip() else raw_content
-    if conversation_context and (not content_to_send or content_to_send == raw_content):
-        content_to_send = expand_message_for_in_app(raw_content)
-    if not content_to_send:
-        content_to_send = raw_content
-
-    if parsed and schedule_from_parsed_callback:
-        delay = getattr(parsed, "delay_seconds", None) or 0
-        repeat_interval = getattr(parsed, "repeat_interval_seconds", None) or 0
-        repeat_duration = getattr(parsed, "repeat_duration_seconds", None) or 0
-        should_schedule = (delay is not None and delay > 0) or (repeat_interval > 0 and repeat_duration > 0)
-        if should_schedule:
-            from types import SimpleNamespace
-            parsed_for_job = SimpleNamespace(
-                message=content_to_send,
-                contact_alias=getattr(parsed, "contact_alias", ""),
-                delay_seconds=delay,
-                scheduled_time=getattr(parsed, "scheduled_time"),
-                raw_input=getattr(parsed, "raw_input", ""),
-                repeat_interval_seconds=repeat_interval or None,
-                repeat_duration_seconds=repeat_duration or None,
-                repeat_stop_on_recipient_reply=getattr(parsed, "repeat_stop_on_recipient_reply", False),
-            )
-            scheduled = schedule_from_parsed_callback(parsed_for_job, conversation_id, g.current_user["id"])
-            if scheduled:
-                return jsonify({
-                    "scheduled": True,
-                    "send_at": scheduled.get("send_at"),
-                    "message": content_to_send,
-                    "raw_intent": raw_content,
-                    "repeat_count": scheduled.get("repeat_count"),
-                }), 202
-    msg = add_message(conversation_id, g.current_user["id"], content_to_send)
-
-    resolve_pending_reply_suggestions(conversation_id, g.current_user["id"])
-
-    on_added = current_app.config.get("on_message_added_callback")
-    if on_added:
-        on_added(conversation_id, g.current_user["id"], msg["id"], msg.get("content"))
-
-    participants = get_participant_ids(conversation_id)
-    other_id = next((p for p in participants if p != g.current_user["id"]), None)
-    if other_id is not None:
-        mark_follow_up_led_to_reply(conversation_id, other_id)
-
-    if push_callback:
-        push_callback(msg, conversation_id)
-    check_callback = current_app.config.get("check_repeat_stop_on_message_callback")
-    if check_callback:
-        check_callback(conversation_id, g.current_user["id"], content_to_send)
-
-    # If parsed intent is no_reply, create rule and schedule timer_elapsed (fixed or adaptive)
-    if parsed and getattr(parsed, "trigger", None) == "no_reply":
-        schedule_timer = current_app.config.get("schedule_timer_elapsed_callback")
-        if schedule_timer:
-            fixed_duration = getattr(parsed, "trigger_duration_seconds", None)
-            if fixed_duration and fixed_duration > 0:
-                delay_seconds = fixed_duration
-            else:
-                state = get_conversation_state(conversation_id, g.current_user["id"])
-                policy = intent_to_policy(getattr(parsed, "raw_input", "") or "", state)
-                delay_seconds = compute_adaptive_delay_seconds(
-                    policy, state, default_fallback_seconds=14400
-                )
-            rule = create_rule(
-                conversation_id,
-                g.current_user["id"],
-                trigger="no_reply",
-                trigger_duration_seconds=delay_seconds,
-                trigger_since_message_id=msg["id"],
-                action=getattr(parsed, "action", "generate_followup") or "generate_followup",
-                tone=getattr(parsed, "tone", None),
-                message_hint=(getattr(parsed, "message", None) or "follow up").strip() or "follow up",
-                raw_intent=getattr(parsed, "raw_input", None),
-            )
-            schedule_timer(rule["id"], conversation_id, g.current_user["id"], delay_seconds)
-
-    sender = get_user_by_id(msg["sender_id"])
-    return jsonify(_message_to_json(msg, sender["username"] if sender else None)), 201
+    return jsonify({"sending": True, "conversation_id": conversation_id}), 202
 
 
 # ----- Drafts (agent-generated messages awaiting approval) -----

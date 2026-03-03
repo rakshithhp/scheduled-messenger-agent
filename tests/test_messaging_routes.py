@@ -1,5 +1,6 @@
 """Unit tests for messaging API routes (conversations, messages)."""
 
+import time
 from unittest.mock import patch
 
 import pytest
@@ -167,8 +168,8 @@ def test_send_message_returns_400_when_content_empty(client):
     assert r.status_code == 400
 
 
-def test_send_message_returns_201_and_message(client):
-    """POST send_message with parsed intent returns 201 and message payload."""
+def test_send_message_returns_202_then_message_appears(client):
+    """POST send_message returns 202 immediately; message is added in background and appears in GET."""
     with patch("app.parse_request") as mock_parse, patch("messaging.routes.expand_message_for_in_app") as mock_expand:
         mock_parse.return_value = ScheduledMessage(
             message="Hello there",
@@ -194,14 +195,13 @@ def test_send_message_returns_201_and_message(client):
             headers=_auth_headers(token1),
             json={"content": "hello"},
         )
-        assert r.status_code == 201
+        assert r.status_code == 202
         data = r.get_json()
-        assert data["content"] == "Hello there"
-        assert "id" in data
-        assert data["sender_id"] is not None
+        assert data.get("sending") is True
         assert data["conversation_id"] == conv_id
 
-        # GET messages returns the new message
+        # Background thread adds the message; wait briefly then GET
+        time.sleep(1.0)
         r_list = client.get(
             f"/api/conversations/{conv_id}/messages",
             headers=_auth_headers(token1),
@@ -213,7 +213,7 @@ def test_send_message_returns_201_and_message(client):
 
 
 def test_send_message_scheduled_returns_202(client):
-    """POST send_message with delay_seconds > 0 returns 202 when scheduler runs."""
+    """POST send_message returns 202 immediately; scheduled case is handled in background (WS notification)."""
     with patch("app.parse_request") as mock_parse, patch("messaging.routes.expand_message_for_in_app") as mock_expand:
         mock_parse.return_value = ScheduledMessage(
             message="Reminder",
@@ -241,6 +241,5 @@ def test_send_message_scheduled_returns_202(client):
         )
         assert r.status_code == 202
         data = r.get_json()
-        assert data.get("scheduled") is True
-        assert "send_at" in data
-        assert data.get("message") == "Reminder"
+        assert data.get("sending") is True
+        assert data["conversation_id"] == conv_id

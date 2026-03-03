@@ -154,6 +154,30 @@ def push_draft_to_ui(draft: dict) -> None:
                 pass
 
 
+def push_message_failed_to_user(user_id: int, conversation_id: int, error_message: str) -> None:
+    """Notify the user that sending a message failed (e.g. after background parse/expand)."""
+    payload = {"type": "message_failed", "conversation_id": conversation_id, "error": error_message}
+    body = json.dumps(payload)
+    with ws_lock:
+        for ws in ws_connections.get(user_id, set()).copy():
+            try:
+                ws.send(body)
+            except Exception:
+                pass
+
+
+def push_message_scheduled_to_user(user_id: int, conversation_id: int, data: dict) -> None:
+    """Notify the user that their message was scheduled (so UI can show feedback)."""
+    payload = {"type": "message_scheduled", "conversation_id": conversation_id, **data}
+    body = json.dumps(payload)
+    with ws_lock:
+        for ws in ws_connections.get(user_id, set()).copy():
+            try:
+                ws.send(body)
+            except Exception:
+                pass
+
+
 def auto_send_follow_up(conversation_id: int, sender_id: int, content: str) -> None:
     """Send a follow-up message immediately (high confidence). Used by the agent worker."""
     m = messaging_add_message(conversation_id, sender_id, content)
@@ -262,6 +286,8 @@ app.config["check_repeat_stop_on_message_callback"] = check_repeat_stop_on_messa
 app.config["on_message_added_callback"] = on_message_added
 app.config["schedule_timer_elapsed_callback"] = schedule_timer_elapsed
 app.config["push_draft_to_ui_callback"] = push_draft_to_ui
+app.config["push_message_failed_callback"] = push_message_failed_to_user
+app.config["push_message_scheduled_callback"] = push_message_scheduled_to_user
 
 # Start agent worker: timer_elapsed creates drafts (or auto-sends when confidence high)
 start_agent_worker(
@@ -270,9 +296,16 @@ start_agent_worker(
 )
 
 
-# Reply suggestion: when someone messages you, draft a possible reply and show for approval
+# Reply suggestion: when someone messages you, draft a possible reply and show for approval.
+# Run in a background thread so the HTTP request returns immediately; suggestion is pushed via WebSocket when ready.
 def _reply_suggestion_handler(event_type: str, payload: dict) -> None:
-    on_message_received_for_reply_suggestion(event_type, payload, push_draft_to_ui=push_draft_to_ui)
+    def run() -> None:
+        try:
+            on_message_received_for_reply_suggestion(event_type, payload, push_draft_to_ui=push_draft_to_ui)
+        except Exception:
+            app.logger.exception("Reply suggestion failed")
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 register_handler(MESSAGE_RECEIVED, _reply_suggestion_handler)

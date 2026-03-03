@@ -590,6 +590,7 @@
           <div class="chat-input-row" id="chat-input-row" style="display:none;">
             <input type="text" id="chat-input" placeholder="Your intent — e.g. “thanks!” or “remind me in 1 hour to call”" />
             <button type="button" id="chat-send">Send</button>
+            <span id="chat-feedback" class="feedback" style="margin-left:0.5rem;font-size:0.85rem;"></span>
           </div>
         </div>
       </div>
@@ -1125,16 +1126,21 @@
       const content = input.value.trim();
       if (!content || !selectedConvoId) return;
       sendBtn.disabled = true;
+      const chatFb = document.getElementById('chat-feedback');
+      if (chatFb) chatFb.textContent = '';
       api('/api/conversations/' + selectedConvoId + '/messages', {
         method: 'POST',
         body: JSON.stringify({ content: content })
       }).then(r => r.json()).then(data => {
         if (data.error) return;
         input.value = '';
+        if (data.sending) {
+          // 202: message is being sent in background; it will appear via WebSocket (new_message)
+          delete pendingDraftsByConvo[selectedConvoId];
+          renderDraftBanner();
+        }
         if (data.id) appendMessageToUI(data, selectedConvoId);
         if (data.scheduled) loadConversations();
-        delete pendingDraftsByConvo[selectedConvoId];
-        renderDraftBanner();
       }).catch(() => {}).finally(() => { sendBtn.disabled = false; });
     }
 
@@ -1149,14 +1155,25 @@
           try {
             const data = JSON.parse(e.data);
             if (data.type === 'new_message') {
-              if (data.message && data.message.sender_id !== currentUserId) {
+              if (data.message) {
                 appendMessageToUI(data.message, data.conversation_id);
-                showMessageNotification(data);
+                if (data.message.sender_id !== currentUserId) showMessageNotification(data);
                 if (data.conversation_id === selectedConvoId) {
                   delete pendingDraftsByConvo[selectedConvoId];
                   renderDraftBanner();
+                  const cf = document.getElementById('chat-feedback');
+                  if (cf) cf.textContent = '';
                 }
               }
+              loadConversations();
+            }
+            if (data.type === 'message_failed' && data.conversation_id === selectedConvoId) {
+              const feedback = document.getElementById('chat-feedback');
+              if (feedback) feedback.textContent = 'Send failed: ' + (data.error || 'Unknown error');
+            }
+            if (data.type === 'message_scheduled' && data.conversation_id === selectedConvoId) {
+              const feedback = document.getElementById('chat-feedback');
+              if (feedback) feedback.textContent = 'Scheduled for ' + (data.send_at || 'later');
               loadConversations();
             }
             if (data.type === 'new_draft' && data.draft) {
