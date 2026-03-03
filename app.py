@@ -2,6 +2,7 @@
 """Web UI for the Scheduled Messenger Agent."""
 
 import json
+import logging
 import os
 import queue
 import threading
@@ -29,6 +30,8 @@ from messaging.routes import bp as messaging_bp
 load_dotenv()
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 app.config["JWT_SECRET"] = os.environ.get("JWT_SECRET", app.secret_key)
 sock = Sock(app)
@@ -311,6 +314,7 @@ def require_auth():
                     g.current_user = user
 
     if g.current_user is None:
+        app.logger.info("Auth failed: %s %s (no valid token or cookie)", request.method, path)
         if path == "/" and request.method == "GET":
             return redirect(url_for("login_page"))
         return jsonify({"error": "Authentication required"}), 401
@@ -376,21 +380,25 @@ def schedule():
 @app.route("/contacts", methods=["POST"])
 def add_contact_api():
     """Add a new contact via the UI."""
+    user_id = getattr(g, "current_user", None) and g.current_user.get("id")
+    app.logger.info("POST /contacts received (user_id=%s)", user_id)
     data = request.get_json() or {}
     alias = (data.get("alias") or "").strip()
     phone = (data.get("phone") or "").strip()
 
     if not alias:
+        app.logger.info("POST /contacts 400: alias missing")
         return jsonify({"error": "Alias is required (e.g. wife, mom)"}), 400
     if not phone:
+        app.logger.info("POST /contacts 400: phone missing")
         return jsonify({"error": "Phone number is required (e.g. +15551234567)"}), 400
 
     try:
         add_contact(alias, phone)
-    except OSError as e:
-        return jsonify({
-            "error": "Could not save contact (server storage may be read-only). Set CONTACTS_FILE to a writable path (e.g. /var/app/data/contacts.json)."
-        }), 503
+        app.logger.info("POST /contacts 200: added %s -> %s", alias, phone)
+    except Exception as e:
+        app.logger.exception("POST /contacts 500: add_contact failed: %s", e)
+        return jsonify({"error": f"Could not save contact: {e!s}"}), 500
     return jsonify({"success": True, "alias": alias.lower(), "phone": phone})
 
 

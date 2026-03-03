@@ -127,6 +127,22 @@ def me():
     return jsonify(_user_safe(g.current_user))
 
 
+@bp.route("/token")
+def token():
+    """Return a fresh JWT for the current user (auth via cookie or Bearer). Use on app load to sync localStorage."""
+    if not getattr(g, "current_user", None):
+        return jsonify({"error": "Not authenticated"}), 401
+    try:
+        token_str = create_token(
+            g.current_user["id"], g.current_user["username"],
+            secret=current_app.config.get("JWT_SECRET"),
+        )
+        return jsonify({"token": token_str})
+    except Exception:
+        current_app.logger.exception("auth token")
+        return jsonify({"error": "Could not issue token"}), 500
+
+
 @bp.route("/logout", methods=["POST", "GET"])
 def logout():
     """Clear auth cookie and redirect to login."""

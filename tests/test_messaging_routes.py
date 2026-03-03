@@ -79,6 +79,52 @@ def test_create_conversation_with_self_returns_400(client):
     assert "yourself" in (r.get_json().get("error") or "").lower()
 
 
+def test_add_contact_success(client):
+    """POST /contacts with auth and alias+phone adds the contact and returns 200."""
+    _, token = _register(client, "addcontact_user", phone="+15550999001")
+    r = client.post(
+        "/contacts",
+        headers={**_auth_headers(token), "Content-Type": "application/json"},
+        json={"alias": "wife", "phone": "+15551234567"},
+    )
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data.get("success") is True
+    assert data.get("alias") == "wife"
+    assert data.get("phone") == "+15551234567"
+    from agent.contacts import load_contacts
+    contacts = load_contacts()
+    assert "wife" in contacts
+    assert contacts["wife"] == "+15551234567"
+
+
+def test_add_contact_requires_auth(client):
+    """POST /contacts without token returns 401."""
+    r = client.post(
+        "/contacts",
+        headers={"Content-Type": "application/json"},
+        json={"alias": "mom", "phone": "+15559999999"},
+    )
+    assert r.status_code == 401
+
+
+def test_add_contact_requires_alias_and_phone(client):
+    """POST /contacts with missing alias or phone returns 400."""
+    _, token = _register(client, "addcontact_user2", phone="+15550999002")
+    r1 = client.post(
+        "/contacts",
+        headers={**_auth_headers(token), "Content-Type": "application/json"},
+        json={"phone": "+15551111111"},
+    )
+    assert r1.status_code == 400
+    r2 = client.post(
+        "/contacts",
+        headers={**_auth_headers(token), "Content-Type": "application/json"},
+        json={"alias": "dad"},
+    )
+    assert r2.status_code == 400
+
+
 def test_list_messages_requires_auth(client):
     """GET /api/conversations/1/messages without token returns 401."""
     r = client.get("/api/conversations/1/messages")

@@ -131,6 +131,21 @@ eb deploy
 - [ ] Set `AUTH_DB_PATH=/var/app/data/auth.db` if using the included `.ebextensions` (persistent DB)
 - [ ] (Optional) Add HTTPS listener and custom domain in the EB console
 
+## Viewing logs
+
+- **Local:** Run the app with `python app.py` or `flask run` (or `gunicorn`). Logs go to **stderr** (your terminal). You’ll see lines like:
+  - `POST /contacts received (user_id=1)` – request reached the server with auth
+  - `Auth failed: POST /contacts` – no valid token/cookie (401)
+  - `POST /contacts 200: added wife -> +15551234567` – contact saved
+  - `POST /contacts 500: add_contact failed: ...` – server error (e.g. permission)
+- **Browser (frontend):** Open **Developer Tools** (F12 or Cmd+Option+I) → **Console**. When you click Add contact you’ll see `[Add contact] clicked`, `[Add contact] sending POST...`, then `[Add contact] response status=200` or the error. Use this to see if the click runs, whether a token is sent, and what the server returned.
+- **AWS:** Use `eb logs` to download and open the environment logs, or in the EB console open **Logs** → **Request Logs** / **Full Logs**.
+
+## Data persistence: local vs AWS
+
+- **Locally:** `auth.db`, `contacts.json`, and message/conversation data live in your project directory. Restarting the app or re-running it does **not** clear them, so registered users and history stay.
+- **On AWS (EB):** Each deploy can replace the app directory (`/var/app/current`), so anything stored there (including the default `auth.db` and `contacts.json`) can be lost. To keep data across deploys, set `AUTH_DB_PATH` and `CONTACTS_FILE` to a persistent path (e.g. `/var/app/data/auth.db` and `/var/app/data/contacts.json`) and ensure that directory exists and is writable (see section 5).
+
 ## Notes
 
 - **Auth database (SQLite):** The app uses Python’s built-in **sqlite3** (no extra install). The file `auth.db` is **not** in git; the **code** in `auth/db.py` is. On deploy, the app creates `auth.db` on first run via `init_db()`. On Elastic Beanstalk the app directory can be overwritten on deploy, so the DB may reset unless you set `AUTH_DB_PATH` to a persistent path (e.g. a directory that survives deploys or an EFS mount). For multiple instances or long-term durability, consider **RDS** (PostgreSQL/MySQL) later.

@@ -73,7 +73,12 @@ def list_users():
     if in_my_contacts:
         phones = _phones_in_my_contacts()
         if not phones:
-            return jsonify([])
+            # No contacts yet: show all other users so "Start new chat" still works
+            rows = conn.execute(
+                "SELECT id, username, first_name, last_name, phone FROM users WHERE id != ? ORDER BY first_name, username",
+                (g.current_user["id"],),
+            ).fetchall()
+            return jsonify([dict(r) for r in rows])
         placeholders = ",".join("?" * len(phones))
         rows = conn.execute(
             f"SELECT id, username, first_name, last_name, phone FROM users WHERE id != ? AND normalized_phone IN ({placeholders}) ORDER BY first_name, username",

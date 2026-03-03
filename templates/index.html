@@ -596,10 +596,10 @@
     </div>
 
     <div id="panel-contacts" class="tab-panel">
-      <form class="contact-form" id="contact-form">
+      <form class="contact-form" id="contact-form" action="javascript:void(0)" onsubmit="return false;">
         <input type="text" id="contact-alias" placeholder="Alias (e.g. wife, mom)" required />
         <input type="text" id="contact-phone" placeholder="Phone (e.g. +15551234567)" required />
-        <button type="submit" id="add-contact-btn">Add</button>
+        <button type="button" id="add-contact-btn" onclick="typeof window.addContact === 'function' && window.addContact()">Add</button>
       </form>
       <div id="contact-feedback" class="feedback"></div>
       <div class="contact-list">
@@ -630,6 +630,12 @@
   </main>
 
   <script>
+    // Sync token to localStorage when app loads (e.g. user landed with cookie only)
+    fetch('/auth/token', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data && data.token) localStorage.setItem('token', data.token); })
+      .catch(() => {});
+
     const form = document.getElementById('form');
     const input = document.getElementById('request');
     const sendBtn = document.getElementById('send');
@@ -645,7 +651,7 @@
     // Tab switching + History tab polling
     let historyPollInterval = null;
     function refreshHistoryFromServer() {
-      fetch('/api/sent-messages', { credentials: 'include' })
+      api('/api/sent-messages')
         .then(r => r.json())
         .then(messages => {
           if (!Array.isArray(messages) || messages.length === 0) {
@@ -690,15 +696,6 @@
       });
     });
 
-    // If Messages is the default tab, run its init on load
-    if (document.querySelector('.tab[data-tab="messages"]').classList.contains('active')) {
-      document.querySelector('main').classList.add('messages-active');
-      loadChatUsers();
-      loadConversations();
-      if (!ws || ws.readyState !== WebSocket.OPEN) connectWs();
-      if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
-    }
-
     function showFeedback(msg, type = 'success') {
       feedback.textContent = msg;
       feedback.className = 'feedback ' + type;
@@ -735,56 +732,72 @@
       }, 5000);
     }
 
-    contactForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const alias = document.getElementById('contact-alias').value.trim();
-      const phone = document.getElementById('contact-phone').value.trim();
-      if (!alias || !phone) return;
-
+    window.addContact = async function addContact() {
+      console.log('[Add contact] clicked');
+      const aliasEl = document.getElementById('contact-alias');
+      const phoneEl = document.getElementById('contact-phone');
+      const feedbackEl = document.getElementById('contact-feedback');
+      const listEl = document.getElementById('contacts-list');
+      const alias = (aliasEl && aliasEl.value || '').trim();
+      const phone = (phoneEl && phoneEl.value || '').trim();
+      if (!alias || !phone) {
+        console.log('[Add contact] validation failed: alias=%s phone=%s', !!alias, !!phone);
+        if (feedbackEl) { feedbackEl.textContent = 'Enter alias and phone.'; feedbackEl.className = 'feedback error'; }
+        return;
+      }
       const btn = document.getElementById('add-contact-btn');
-      btn.disabled = true;
-      contactFeedback.textContent = '';
-      contactFeedback.className = 'feedback';
-
+      if (btn) btn.disabled = true;
+      if (feedbackEl) { feedbackEl.textContent = 'Adding…'; feedbackEl.className = 'feedback'; }
+      const token = localStorage.getItem('token') || '';
+      console.log('[Add contact] sending POST alias=%s hasToken=%s', alias, !!token);
       try {
-        const res = await api('/contacts', {
+        const res = await fetch('/contacts', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+          credentials: 'include',
           body: JSON.stringify({ alias, phone })
         });
         const data = await res.json().catch(() => ({}));
-
+        console.log('[Add contact] response status=%s ok=%s data=%o', res.status, res.ok, data);
         if (!res.ok) {
-          contactFeedback.textContent = data.error || 'Failed to add contact';
-          contactFeedback.className = 'feedback error';
+          console.warn('[Add contact] failed:', res.status, data.error || data);
+          if (feedbackEl) {
+            feedbackEl.textContent = (res.status === 401 ? 'Please log in again.' : (data.error || 'Failed to add contact'));
+            feedbackEl.className = 'feedback error';
+          }
           return;
         }
-
-        contactFeedback.textContent = `Added: ${data.alias} → ${data.phone}`;
-        contactFeedback.className = 'feedback success';
-        if (contactsEmpty) contactsEmpty.style.display = 'none';
-        const li = document.createElement('li');
-        li.innerHTML = `<span class="contact-alias">${escapeHtml(data.alias)}</span> <span class="contact-phone">${escapeHtml(data.phone)}</span>`;
-        contactsList.appendChild(li);
+        console.log('[Add contact] success');
+        if (feedbackEl) { feedbackEl.textContent = 'Added: ' + (data.alias || alias) + ' → ' + (data.phone || phone); feedbackEl.className = 'feedback success'; }
+        const contactsEmptyEl = document.getElementById('contacts-empty');
+        if (contactsEmptyEl) contactsEmptyEl.style.display = 'none';
+        if (listEl) {
+          const li = document.createElement('li');
+          li.innerHTML = '<span class="contact-alias">' + (data.alias || alias) + '</span> <span class="contact-phone">' + (data.phone || phone) + '</span>';
+          listEl.appendChild(li);
+        }
         const sendTabContacts = document.getElementById('send-tab-contacts');
         const sendTabContactsEmpty = document.getElementById('send-tab-contacts-empty');
-        if (sendTabContacts) {
-          if (sendTabContactsEmpty) sendTabContactsEmpty.style.display = 'none';
+        if (sendTabContacts && sendTabContactsEmpty) {
+          sendTabContactsEmpty.style.display = 'none';
           const sendLi = document.createElement('li');
-          sendLi.textContent = `${data.alias}: ${data.phone}`;
+          sendLi.textContent = (data.alias || alias) + ': ' + (data.phone || phone);
           sendTabContacts.appendChild(sendLi);
         }
-        document.getElementById('contact-alias').value = '';
-        document.getElementById('contact-phone').value = '';
-        loadChatUsers();
+        if (aliasEl) aliasEl.value = '';
+        if (phoneEl) phoneEl.value = '';
+        if (typeof loadChatUsers === 'function') loadChatUsers();
       } catch (err) {
-        contactFeedback.textContent = 'Network error: ' + (err.message || 'Could not add contact');
-        contactFeedback.className = 'feedback error';
+        console.error('[Add contact] error:', err);
+        if (feedbackEl) { feedbackEl.textContent = 'Network error: ' + (err.message || 'Could not add contact'); feedbackEl.className = 'feedback error'; }
       } finally {
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
       }
-    });
+    };
+    const addBtn = document.getElementById('add-contact-btn');
+    if (addBtn) addBtn.addEventListener('click', window.addContact);
 
-    form.addEventListener('submit', async (e) => {
+    if (form) form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const requestText = input.value.trim();
       if (!requestText) return;
@@ -793,13 +806,11 @@
       clearFeedback();
 
       try {
-        const res = await fetch('/schedule', {
+        const res = await api('/schedule', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ request: requestText })
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           showFeedback(data.error || 'Something went wrong', 'error');
@@ -865,8 +876,16 @@
     }
 
     function loadChatUsers() {
-      api('/api/users?in_my_contacts=1').then(r => r.json()).then(users => {
-        const sel = document.getElementById('chat-user-select');
+      const sel = document.getElementById('chat-user-select');
+      if (!sel) return;
+      api('/api/users?in_my_contacts=1').then(r => {
+        if (!r.ok) {
+          sel.innerHTML = r.status === 401 ? '<option value="">Please log in again</option>' : '<option value="">Error loading users</option>';
+          return null;
+        }
+        return r.json();
+      }).then(users => {
+        if (users === null) return;
         sel.innerHTML = '<option value="">Select from my contacts...</option>';
         if (!Array.isArray(users)) return;
         if (users.length === 0) {
@@ -880,7 +899,7 @@
           sel.appendChild(opt);
         });
       }).catch(() => {
-        document.getElementById('chat-user-select').innerHTML = '<option value="">Error loading</option>';
+        sel.innerHTML = '<option value="">Error loading</option>';
       });
     }
 
@@ -1050,15 +1069,23 @@
 
     document.getElementById('chat-start-btn').addEventListener('click', () => {
       const userId = document.getElementById('chat-user-select').value;
-      if (!userId) return;
+      const feedback = document.getElementById('chat-phone-feedback');
+      if (!userId) {
+        if (feedback) feedback.textContent = 'Select a user above or search by phone below.';
+        return;
+      }
+      if (feedback) feedback.textContent = '';
       api('/api/conversations', { method: 'POST', body: JSON.stringify({ user_id: parseInt(userId) }) })
         .then(r => r.json())
         .then(data => {
-          if (data.error) return;
+          if (data.error) {
+            if (feedback) feedback.textContent = data.error;
+            return;
+          }
           document.getElementById('chat-new-panel').classList.remove('open');
           loadConversations();
           selectConversation(data.id);
-        }).catch(() => {});
+        }).catch(() => { if (feedback) feedback.textContent = 'Error starting chat'; });
     });
 
     document.getElementById('chat-phone-search-btn').addEventListener('click', () => {
@@ -1147,6 +1174,15 @@
       } catch (err) {}
     }
 
+    // If Messages is the default tab, run its init on load (must run after all functions are defined)
+    const messagesTab = document.querySelector('.tab[data-tab="messages"]');
+    if (messagesTab && messagesTab.classList.contains('active')) {
+      document.querySelector('main')?.classList.add('messages-active');
+      loadChatUsers();
+      loadConversations();
+      if (!ws || ws.readyState !== WebSocket.OPEN) connectWs();
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
+    }
   </script>
 </body>
 </html>
