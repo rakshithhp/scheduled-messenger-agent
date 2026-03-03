@@ -2,6 +2,7 @@ venv/
 .env
 contacts.json
 sent_messages.json
+auth.db
 __pycache__/
 *.pyc
 *.pyo

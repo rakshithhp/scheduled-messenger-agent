@@ -19,6 +19,15 @@ watchdog>=3.0.0
 
 # Web UI
 flask>=3.0.0
+flask-sock>=0.7.0
+simple-websocket>=1.0.0
+
+# Auth
+PyJWT>=2.8.0
 
 # Production server (for AWS deployment)
 gunicorn>=21.0.0
+
+# Tests
+pytest>=7.0.0
+pre-commit>=3.0.0

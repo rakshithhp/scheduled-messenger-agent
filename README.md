@@ -131,6 +131,23 @@ scheduled-messenger-agent/
 └── .env               # Your secrets (from .env.example)
 ```
 
+## Testing
+
+The suite covers auth (DB, models, JWT, routes), messaging (conversations, messages, API routes), and the agent parser (intent parsing, expansion, repeat-stop logic). OpenAI is mocked in parser tests so no API key is needed.
+
+```bash
+pytest tests/ -v
+```
+
+To run tests automatically before every commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+After that, `git commit` will run `pytest tests/ -q` first; the commit is blocked if tests fail (use `git commit --no-verify` to skip).
+
 ## Deploy to AWS
 
 To host the app on AWS and access it via the web, see **[DEPLOY.md](DEPLOY.md)** for step-by-step instructions using Elastic Beanstalk.

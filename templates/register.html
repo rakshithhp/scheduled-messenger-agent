@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create account · Scheduled Messenger</title>
+  <style>
+    :root {
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.5rem;
+      --space-6: 2rem;
+      --space-8: 3rem;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --bg-base: #0d0d0f;
+      --bg-surface: #161618;
+      --border: #2a2a2e;
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-muted: rgba(59, 130, 246, 0.12);
+      --error-bg: rgba(239, 68, 68, 0.12);
+      --error-border: rgba(239, 68, 68, 0.35);
+      --error-text: #fca5a5;
+      --success-bg: rgba(34, 197, 94, 0.12);
+      --success-text: #86efac;
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
+      --font-sans: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.5;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      margin: 0;
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      -webkit-font-smoothing: antialiased;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      box-shadow: var(--shadow-md);
+    }
+    .auth-card h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0 0 var(--space-2);
+      color: var(--text-primary);
+    }
+    .auth-card .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin: 0 0 var(--space-6);
+    }
+    .auth-card form { margin-bottom: var(--space-4); }
+    .auth-card input[type="text"],
+    .auth-card input[type="password"],
+    .auth-card input[type="email"],
+    .auth-card input[type="tel"] {
+      width: 100%;
+      padding: var(--space-3) var(--space-4);
+      font-size: 1rem;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      outline: none;
+      margin-bottom: var(--space-4);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .auth-card input::placeholder { color: var(--text-muted); }
+    .auth-card input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-muted);
+    }
+    .auth-card button {
+      width: 100%;
+      padding: var(--space-3) var(--space-5);
+      font-size: 1rem;
+      font-weight: 500;
+      font-family: inherit;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .auth-card button:hover { background: var(--accent-hover); }
+    .auth-card button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .auth-card button:disabled {
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+    .feedback {
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: 0.9375rem;
+      margin-top: var(--space-4);
+    }
+    .feedback.error {
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      color: var(--error-text);
+    }
+    .feedback.success {
+      background: var(--success-bg);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: var(--success-text);
+    }
+    .feedback:empty { display: none; }
+    .auth-footer {
+      margin-top: var(--space-6);
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .auth-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .auth-footer a:hover { text-decoration: underline; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="auth-card">
+    <h1>Create account</h1>
+    <p class="subtitle">Scheduled Messenger</p>
+    <form id="register-form">
+      <input type="text" id="first-name" placeholder="First name" required autocomplete="given-name" />
+      <input type="text" id="last-name" placeholder="Last name" required autocomplete="family-name" />
+      <input type="text" id="username" placeholder="Username" required autocomplete="username" />
+      <input type="password" id="password" placeholder="Password (min 6 characters)" required autocomplete="new-password" minlength="6" />
+      <input type="tel" id="phone" placeholder="Phone" required autocomplete="tel" />
+      <input type="email" id="email" placeholder="Email" required autocomplete="email" />
+      <button type="submit" id="btn">Register</button>
+    </form>
+    <div id="feedback" class="feedback"></div>
+    <p class="auth-footer">Already have an account? <a href="/login">Log in</a></p>
+  </main>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const first_name = document.getElementById('first-name').value.trim();
+      const last_name = document.getElementById('last-name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const btn = document.getElementById('btn');
+      const feedback = document.getElementById('feedback');
+      btn.disabled = true;
+      feedback.textContent = '';
+      feedback.className = 'feedback';
+      try {
+        const res = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password, first_name, last_name, phone, email })
+        });
+        let data;
+        try {
+          data = await res.json();
+        } catch (_) {
+          feedback.textContent = 'Server returned an invalid response. Try again or use another port (e.g. 5034).';
+          feedback.className = 'feedback error';
+          return;
+        }
+        if (!res.ok) {
+          feedback.textContent = data.error || 'Registration failed';
+          feedback.className = 'feedback error';
+          return;
+        }
+        if (data.token) localStorage.setItem('token', data.token);
+        window.location.href = '/';
+      } catch (err) {
+        feedback.textContent = 'Network error: ' + err.message;
+        feedback.className = 'feedback error';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
