@@ -385,7 +385,12 @@ def add_contact_api():
     if not phone:
         return jsonify({"error": "Phone number is required (e.g. +15551234567)"}), 400
 
-    add_contact(alias, phone)
+    try:
+        add_contact(alias, phone)
+    except OSError as e:
+        return jsonify({
+            "error": "Could not save contact (server storage may be read-only). Set CONTACTS_FILE to a writable path (e.g. /var/app/data/contacts.json)."
+        }), 503
     return jsonify({"success": True, "alias": alias.lower(), "phone": phone})
 
 

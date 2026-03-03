@@ -4,20 +4,26 @@ import json
 import os
 from pathlib import Path
 
-CONTACTS_FILE = Path(__file__).parent.parent / "contacts.json"
+_DEFAULT_PATH = Path(__file__).parent.parent / "contacts.json"
+CONTACTS_FILE = Path(os.environ.get("CONTACTS_FILE", str(_DEFAULT_PATH)))
 
 
 def load_contacts() -> dict[str, str]:
     """Load contact alias → phone number mapping."""
     if CONTACTS_FILE.exists():
-        with open(CONTACTS_FILE) as f:
-            return json.load(f)
+        try:
+            with open(CONTACTS_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
     return {}
 
 
 def save_contacts(contacts: dict[str, str]) -> None:
-    """Save contacts to file."""
-    with open(CONTACTS_FILE, "w") as f:
+    """Save contacts to file. Raises OSError if not writable (e.g. read-only filesystem on AWS)."""
+    p = CONTACTS_FILE
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w") as f:
         json.dump(contacts, f, indent=2)
 
 

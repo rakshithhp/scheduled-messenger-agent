@@ -747,13 +747,11 @@
       contactFeedback.className = 'feedback';
 
       try {
-        const res = await fetch('/contacts', {
+        const res = await api('/contacts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ alias, phone })
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           contactFeedback.textContent = data.error || 'Failed to add contact';
@@ -765,7 +763,7 @@
         contactFeedback.className = 'feedback success';
         if (contactsEmpty) contactsEmpty.style.display = 'none';
         const li = document.createElement('li');
-        li.innerHTML = `<span class="contact-alias">${data.alias}</span> <span class="contact-phone">${data.phone}</span>`;
+        li.innerHTML = `<span class="contact-alias">${escapeHtml(data.alias)}</span> <span class="contact-phone">${escapeHtml(data.phone)}</span>`;
         contactsList.appendChild(li);
         const sendTabContacts = document.getElementById('send-tab-contacts');
         const sendTabContactsEmpty = document.getElementById('send-tab-contacts-empty');
@@ -777,8 +775,9 @@
         }
         document.getElementById('contact-alias').value = '';
         document.getElementById('contact-phone').value = '';
+        loadChatUsers();
       } catch (err) {
-        contactFeedback.textContent = 'Network error: ' + err.message;
+        contactFeedback.textContent = 'Network error: ' + (err.message || 'Could not add contact');
         contactFeedback.className = 'feedback error';
       } finally {
         btn.disabled = false;
