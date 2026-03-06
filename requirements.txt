@@ -28,6 +28,9 @@ PyJWT>=2.8.0
 # Production server (for AWS deployment)
 gunicorn>=21.0.0
 
+# APNs push (optional; for iOS push notifications)
+httpx[http2]>=0.27.0
+
 # Tests
 pytest>=7.0.0
 pre-commit>=3.0.0

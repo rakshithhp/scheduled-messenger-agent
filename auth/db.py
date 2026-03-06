@@ -177,4 +177,17 @@ def init_db() -> None:
         )
     """)
 
+    # APNs: device tokens per user (iOS push notifications)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS device_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_token TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT 'ios',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE (user_id, device_token)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id)")
+
     conn.commit()

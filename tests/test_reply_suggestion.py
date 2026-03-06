@@ -4,7 +4,12 @@ from unittest.mock import patch, MagicMock
 import pytest
 from auth.models import create_user, get_user_by_username
 from messaging.models import get_or_create_conversation, add_message, get_messages
-from agent.reply_suggestion import generate_reply_suggestion, on_message_received_for_reply_suggestion
+from agent.reply_suggestion import (
+    generate_reply_suggestion,
+    on_message_received_for_reply_suggestion,
+    _looks_like_closing,
+    _last_message_from_recipient_was_closing,
+)
 
 
 def _user(username):
@@ -36,6 +41,30 @@ def test_generate_reply_suggestion_returns_llm_content(mock_openai, conv_and_use
 def test_generate_reply_suggestion_empty_message_returns_empty(conv_and_users):
     conv, alice, bob = conv_and_users
     assert generate_reply_suggestion([], "", alice["id"]) == ""
+
+
+def test_generate_reply_suggestion_skips_after_closing_loop(conv_and_users):
+    """When they said a closing and we already said a closing, do not suggest again (avoid farewell loop)."""
+    conv, alice, bob = conv_and_users
+    add_message(conv["id"], alice["id"], "Bye! Talk to you later!")
+    add_message(conv["id"], bob["id"], "See you!")
+    recent = get_messages(conv["id"], limit=5)
+    out = generate_reply_suggestion(recent, "See you!", alice["id"])
+    assert out == ""
+
+
+def test_generate_reply_suggestion_skips_emoji_only(conv_and_users):
+    """Emoji-only incoming messages should not create another suggested reply (avoid loops)."""
+    conv, alice, bob = conv_and_users
+    recent = get_messages(conv["id"], limit=5)
+    out = generate_reply_suggestion(recent, "😀😀", alice["id"])
+    assert out == ""
+
+
+def test_looks_like_closing():
+    assert _looks_like_closing("See you!") is True
+    assert _looks_like_closing("Thanks so much") is True
+    assert _looks_like_closing("What time tomorrow?") is False
 
 
 def test_on_message_received_creates_draft_and_calls_push(conv_and_users):

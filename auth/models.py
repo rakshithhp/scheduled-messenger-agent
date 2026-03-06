@@ -98,3 +98,18 @@ def get_user_by_phone(phone: str) -> dict | None:
 def verify_password(user: dict, password: str) -> bool:
     """Check password against user's password_hash."""
     return check_password_hash(user["password_hash"], password)
+
+
+def update_user_name(user_id: int, *, first_name: str | None, last_name: str | None) -> dict | None:
+    """Update user's first/last name. Returns updated safe user dict."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
+        (
+            (first_name or "").strip() or None,
+            (last_name or "").strip() or None,
+            user_id,
+        ),
+    )
+    conn.commit()
+    return get_user_by_id(user_id)

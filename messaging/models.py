@@ -100,6 +100,18 @@ def get_unread_count(conversation_id: int, user_id: int) -> int:
     return r["n"] or 0
 
 
+def get_total_unread_count(user_id: int) -> int:
+    """Total unread messages across all conversations for user."""
+    convos = get_conversations_for_user(user_id)
+    total = 0
+    for c in convos:
+        try:
+            total += int(get_unread_count(c["id"], user_id))
+        except Exception:
+            pass
+    return total
+
+
 def set_last_read(conversation_id: int, user_id: int, message_id: int) -> None:
     """Mark conversation as read up to message_id (inclusive)."""
     conn = get_conn()
@@ -158,6 +170,36 @@ def get_participant_ids(conversation_id: int) -> list[int]:
         (conversation_id,),
     ).fetchall()
     return [r["user_id"] for r in rows]
+
+
+def delete_conversation(conversation_id: int, current_user_id: int) -> bool:
+    """Delete a conversation (and all related rows) if current_user is a participant.
+
+    Note: SQLite foreign key cascades are not guaranteed unless PRAGMA foreign_keys=ON,
+    so we explicitly delete dependent rows.
+    """
+    conn = get_conn()
+    ok = conn.execute(
+        "SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?",
+        (conversation_id, current_user_id),
+    ).fetchone()
+    if not ok:
+        return False
+
+    # Dependent tables (all have conversation_id)
+    conn.execute("DELETE FROM conversation_read_state WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM rules WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM drafts WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM key_moments WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM follow_up_outcomes WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM conversation_embeddings WHERE conversation_id = ?", (conversation_id,))
+
+    # Join table + conversation
+    conn.execute("DELETE FROM conversation_participants WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    conn.commit()
+    return True
 
 
 def get_max_message_id(conversation_id: int) -> int | None:

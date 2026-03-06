@@ -1,0 +1,18 @@
+---
+description: Run relevant tests after changing code
+alwaysApply: true
+---
+
+# Run Tests After Code Changes
+
+Whenever you modify code in this project, run the relevant tests before considering the task complete.
+
+- **After changing anything under `auth/`** or auth-related routes in `app.py`: run  
+  `pytest tests/ -v`
+- **After changing agent code** (`agent/`, parser/scheduler/sender): run any existing tests that cover that code; if none exist, run at least  
+  `pytest tests/ -v`  
+  to ensure auth and app still work.
+- **After changing `app.py`** (routes, middleware): run  
+  `pytest tests/ -v`
+
+Prefer running the full test suite (`pytest tests/ -v`) so nothing is missed. Fix or adjust tests if your changes intentionally change behavior.

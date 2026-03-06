@@ -146,6 +146,18 @@ eb deploy
 - **Locally:** `auth.db`, `contacts.json`, and message/conversation data live in your project directory. Restarting the app or re-running it does **not** clear them, so registered users and history stay.
 - **On AWS (EB):** Each deploy can replace the app directory (`/var/app/current`), so anything stored there (including the default `auth.db` and `contacts.json`) can be lost. To keep data across deploys, set `AUTH_DB_PATH` and `CONTACTS_FILE` to a persistent path (e.g. `/var/app/data/auth.db` and `/var/app/data/contacts.json`) and ensure that directory exists and is writable (see section 5).
 
+## iOS push notifications (APNs, optional)
+
+To send push notifications to the iOS app when a new message arrives (e.g. when the app is in the background), set these environment variables:
+
+- `APNS_KEY_ID` – Key ID from Apple Developer (Certificates, Identifiers & Profiles → Keys → your APNs key)
+- `APNS_TEAM_ID` – Your Apple Developer Team ID
+- `APNS_BUNDLE_ID` – The iOS app bundle ID (e.g. `com.yourcompany.ScheduledMessenger`)
+- `APNS_AUTH_KEY_PATH` – Path on the server to the `.p8` APNs auth key file (or use `APNS_AUTH_KEY_CONTENT` with the key body for AWS)
+- `APNS_SANDBOX=1` – Use sandbox APNs for development; omit or set to `0` for production
+
+The app stores device tokens via `POST /api/device-token` and sends a push to each recipient when a message is sent (see `agent/push.py`). If these vars are not set, push is skipped and the app still works (WebSocket when foregrounded).
+
 ## Notes
 
 - **Auth database (SQLite):** The app uses Python’s built-in **sqlite3** (no extra install). The file `auth.db` is **not** in git; the **code** in `auth/db.py` is. On deploy, the app creates `auth.db` on first run via `init_db()`. On Elastic Beanstalk the app directory can be overwritten on deploy, so the DB may reset unless you set `AUTH_DB_PATH` to a persistent path (e.g. a directory that survives deploys or an EFS mount). For multiple instances or long-term durability, consider **RDS** (PostgreSQL/MySQL) later.

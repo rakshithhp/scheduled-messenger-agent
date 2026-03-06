@@ -16,3 +16,8 @@ AWSCLIV2.pkg
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# macOS / Xcode
+.DS_Store
+**/xcuserdata/
+*.xcuserstate

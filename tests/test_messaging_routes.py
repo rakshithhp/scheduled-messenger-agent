@@ -24,7 +24,6 @@ def _register(client, username: str, **kwargs):
         "first_name": kwargs.get("first_name", "F"),
         "last_name": kwargs.get("last_name", "L"),
         "phone": kwargs.get("phone", "+15550000001"),
-        "email": kwargs.get("email", f"{username}@test.com"),
     }
     r = client.post("/auth/register", json=payload)
     data = r.get_json() if r.data else {}
@@ -64,6 +63,32 @@ def test_create_conversation_by_user_id(client):
     data = r.get_json()
     assert "id" in data
     assert "created_at" in data
+
+
+def test_delete_conversation_requires_auth(client):
+    """DELETE /api/conversations/<id> without token returns 401."""
+    r = client.delete("/api/conversations/1")
+    assert r.status_code == 401
+
+
+def test_delete_conversation_success(client):
+    """DELETE /api/conversations/<id> deletes conversation for participants."""
+    _, token1 = _register(client, "delalice", phone="+15550101001")
+    _, token2 = _register(client, "delbob", phone="+15550101002")
+    from auth.models import get_user_by_username
+    bob = get_user_by_username("delbob")
+    r_conv = client.post(
+        "/api/conversations",
+        headers=_auth_headers(token1),
+        json={"user_id": bob["id"]},
+    )
+    conv_id = r_conv.get_json()["id"]
+    r_del = client.delete(f"/api/conversations/{conv_id}", headers=_auth_headers(token1))
+    assert r_del.status_code == 200
+    # After delete, listing conversations is empty
+    r_list = client.get("/api/conversations", headers=_auth_headers(token1))
+    assert r_list.status_code == 200
+    assert r_list.get_json() == []
 
 
 def test_create_conversation_with_self_returns_400(client):

@@ -15,7 +15,7 @@ def client():
 
 
 def test_register_success(client):
-    """POST /auth/register with all required fields returns 201 and token."""
+    """POST /auth/register with required fields returns 201 and token."""
     r = client.post(
         "/auth/register",
         json={
@@ -24,7 +24,6 @@ def test_register_success(client):
             "first_name": "Alice",
             "last_name": "Route",
             "phone": "+15551234567",
-            "email": "alice@test.com",
         },
     )
     assert r.status_code == 201
@@ -32,7 +31,6 @@ def test_register_success(client):
     assert "token" in data
     assert data["user"]["username"] == "routealice"
     assert data["user"]["first_name"] == "Alice"
-    assert data["user"]["email"] == "alice@test.com"
     assert "password" not in str(data)
 
 
@@ -45,7 +43,6 @@ def test_register_missing_first_name(client):
             "password": "pass1234",
             "last_name": "B",
             "phone": "1",
-            "email": "b@b.com",
         },
     )
     assert r.status_code == 400
@@ -62,7 +59,6 @@ def test_register_missing_password(client):
             "first_name": "C",
             "last_name": "C",
             "phone": "1",
-            "email": "c@c.com",
         },
     )
     assert r.status_code == 400
@@ -78,7 +74,6 @@ def test_register_short_password(client):
             "first_name": "D",
             "last_name": "D",
             "phone": "1",
-            "email": "d@d.com",
         },
     )
     assert r.status_code == 400
@@ -93,14 +88,12 @@ def test_register_duplicate_username(client):
         "first_name": "D",
         "last_name": "D",
         "phone": "1",
-        "email": "d1@d.com",
     }
     client.post("/auth/register", json=payload)
     r = client.post(
         "/auth/register",
         json={
-            **payload,
-            "email": "d2@d.com",
+            **payload
         },
     )
     assert r.status_code == 409
@@ -118,7 +111,6 @@ def test_login_success(client):
             "first_name": "Eve",
             "last_name": "E",
             "phone": "1",
-            "email": "eve@test.com",
         },
     )
     r = client.post(
@@ -141,7 +133,6 @@ def test_login_wrong_password(client):
             "first_name": "F",
             "last_name": "F",
             "phone": "1",
-            "email": "f@f.com",
         },
     )
     r = client.post(
@@ -177,7 +168,6 @@ def test_me_with_valid_token(client):
             "first_name": "Me",
             "last_name": "User",
             "phone": "1",
-            "email": "me@test.com",
         },
     )
     token = reg.get_json()["token"]
@@ -199,7 +189,6 @@ def test_register_sets_cookie(client):
             "first_name": "C",
             "last_name": "U",
             "phone": "1",
-            "email": "cookie@test.com",
         },
     )
     assert r.status_code == 201
@@ -221,3 +210,29 @@ def test_logout_post_returns_ok(client):
     assert r.status_code == 200
     data = r.get_json()
     assert data.get("ok") is True
+
+
+def test_patch_me_updates_first_last_name(client):
+    """PATCH /auth/me updates current user's profile (first/last only)."""
+    reg = client.post(
+        "/auth/register",
+        json={
+            "username": "patchme",
+            "password": "pass1234",
+            "first_name": "Old",
+            "last_name": "Name",
+            "phone": "+15559990001",
+        },
+    )
+    token = reg.get_json()["token"]
+    r = client.patch(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"first_name": "New", "last_name": "Name2", "phone": "+1999"},
+    )
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["first_name"] == "New"
+    assert data["last_name"] == "Name2"
+    # Phone is not editable via PATCH /auth/me
+    assert data["phone"] == "+15559990001"

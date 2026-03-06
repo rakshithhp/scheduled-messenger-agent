@@ -18,6 +18,7 @@ from messaging.models import (
     get_max_message_id,
     get_unread_count,
     set_last_read,
+    delete_conversation,
 )
 from agent.rules import create_rule, get_pending_drafts_for_user, get_draft, get_rule, resolve_draft, resolve_pending_reply_suggestions
 from agent.conversation_state import get_conversation_state
@@ -29,6 +30,7 @@ from agent.memory import (
     get_follow_up_outcomes,
     get_follow_up_success_summary,
 )
+from agent.push import register_device_token, unregister_device_token
 
 bp = Blueprint("messaging", __name__, url_prefix="/api")
 
@@ -95,6 +97,31 @@ def list_users():
     return jsonify([dict(r) for r in rows])
 
 
+@bp.route("/users/match-phones", methods=["POST"])
+def match_phones():
+    """Return registered users whose phone is in the given list (e.g. from device contacts).
+    Body: { \"phones\": [\"+15551234567\", \"555-123-4567\", ...] }. Max 500 phones per request."""
+    data = request.get_json() or {}
+    raw_phones = data.get("phones") or []
+    if not isinstance(raw_phones, list):
+        return jsonify({"error": "phones must be an array"}), 400
+    phones = []
+    for p in raw_phones[:500]:
+        n = normalize_phone(str(p).strip() if p is not None else "")
+        if n:
+            phones.append(n)
+    if not phones:
+        return jsonify([])
+    from auth.db import get_conn
+    conn = get_conn()
+    placeholders = ",".join("?" * len(phones))
+    rows = conn.execute(
+        f"SELECT id, username, first_name, last_name, phone FROM users WHERE id != ? AND normalized_phone IN ({placeholders}) ORDER BY first_name, username",
+        (g.current_user["id"], *phones),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 @bp.route("/conversations", methods=["GET"])
 def list_conversations():
     """List current user's conversations with last message preview and unread count."""
@@ -122,6 +149,16 @@ def create_conversation():
         return jsonify({"error": "Cannot start a conversation with yourself"}), 400
     conv = get_or_create_conversation(g.current_user["id"], other_user["id"])
     return jsonify(conv), 201
+
+
+@bp.route("/conversations/<int:conversation_id>", methods=["DELETE"])
+def delete_conversation_api(conversation_id: int):
+    """Delete a conversation (and all related data) for both participants."""
+    conv = get_conversation(conversation_id, g.current_user["id"])
+    if not conv:
+        return jsonify({"error": "Conversation not found"}), 404
+    delete_conversation(conversation_id, g.current_user["id"])
+    return jsonify({"success": True}), 200
 
 
 @bp.route("/conversations/<int:conversation_id>/read", methods=["POST"])
@@ -380,4 +417,29 @@ def reject_draft(draft_id: int):
     resolved = resolve_draft(draft_id, g.current_user["id"], "rejected")
     if not resolved:
         return jsonify({"error": "Draft could not be resolved"}), 400
+    return jsonify({"success": True}), 200
+
+
+# ----- Device tokens (APNs for iOS push) -----
+
+
+@bp.route("/device-token", methods=["POST"])
+def register_device_token_api():
+    """Register device token for push notifications. Body: { \"device_token\": \"...\", \"platform\": \"ios\" }."""
+    data = request.get_json() or {}
+    token = (data.get("device_token") or "").strip()
+    platform = (data.get("platform") or "ios").strip() or "ios"
+    if not token:
+        return jsonify({"error": "device_token is required"}), 400
+    register_device_token(g.current_user["id"], token, platform)
+    return jsonify({"success": True}), 200
+
+
+@bp.route("/device-token", methods=["DELETE"])
+def unregister_device_token_api():
+    """Unregister device token (e.g. on logout). Body: { \"device_token\": \"...\" }."""
+    data = request.get_json() or {}
+    token = (data.get("device_token") or "").strip()
+    if token:
+        unregister_device_token(g.current_user["id"], token)
     return jsonify({"success": True}), 200

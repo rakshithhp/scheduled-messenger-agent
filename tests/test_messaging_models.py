@@ -12,6 +12,7 @@ from messaging.models import (
     get_participant_ids,
     get_max_message_id,
     get_unread_count,
+    get_total_unread_count,
     set_last_read,
 )
 
@@ -143,5 +144,13 @@ def test_get_unread_count_and_set_last_read(two_users):
     assert get_unread_count(conv["id"], alice["id"]) == 2
     set_last_read(conv["id"], alice["id"], m2["id"])
     assert get_unread_count(conv["id"], alice["id"]) == 1
-    set_last_read(conv["id"], alice["id"], m3["id"])
-    assert get_unread_count(conv["id"], alice["id"]) == 0
+
+
+def test_get_total_unread_count(two_users):
+    """get_total_unread_count sums unread across conversations."""
+    alice, bob = two_users
+    conv1 = get_or_create_conversation(alice["id"], bob["id"])
+    m1 = add_message(conv1["id"], bob["id"], "Hi")  # unread for alice
+    assert get_total_unread_count(alice["id"]) == 1
+    set_last_read(conv1["id"], alice["id"], m1["id"])
+    assert get_total_unread_count(alice["id"]) == 0

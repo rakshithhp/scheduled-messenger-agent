@@ -30,6 +30,7 @@ from messaging.routes import bp as messaging_bp
 load_dotenv()
 
 app = Flask(__name__)
+app.config["JSON_AS_ASCII"] = False  # Keep emoji/Unicode in JSON responses (no \\uXXXX escape)
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
@@ -81,23 +82,28 @@ def get_scheduler() -> Scheduler:
 
 
 def push_message_to_ws(msg: dict, conversation_id: int):
-    """Push a new message to all participants' WebSocket connections."""
+    """Push a new message to all participants' WebSocket connections; send APNs to recipients."""
     from auth.models import get_user_by_id
+    from agent.push import send_apns_to_user
+    from messaging.models import get_total_unread_count
+
     payload = {
         "type": "new_message",
         "conversation_id": conversation_id,
         "message": {
             "id": msg["id"],
+            "conversation_id": conversation_id,
             "sender_id": msg["sender_id"],
             "content": msg["content"],
             "created_at": msg["created_at"],
         },
     }
     sender = get_user_by_id(msg["sender_id"])
+    sender_name = sender["username"] if sender else "Someone"
     if sender:
         payload["message"]["sender_username"] = sender["username"]
     participant_ids = get_participant_ids(conversation_id)
-    body = json.dumps(payload)
+    body = json.dumps(payload, ensure_ascii=False)
     with ws_lock:
         for uid in participant_ids:
             for ws in ws_connections.get(uid, set()).copy():
@@ -105,6 +111,21 @@ def push_message_to_ws(msg: dict, conversation_id: int):
                     ws.send(body)
                 except Exception:
                     pass
+    # APNs: notify recipients (not sender) when app is in background
+    content_preview = (msg.get("content") or "")[:100]
+    for uid in participant_ids:
+        if uid != msg["sender_id"]:
+            try:
+                badge = get_total_unread_count(uid)
+                send_apns_to_user(
+                    uid,
+                    title=sender_name,
+                    body=content_preview or "New message",
+                    data={"conversation_id": conversation_id, "message_id": msg["id"]},
+                    badge=badge,
+                )
+            except Exception:
+                pass
 
 
 def on_message_added(
@@ -145,7 +166,7 @@ def push_draft_to_ui(draft: dict) -> None:
     if user_id is None:
         return
     payload = {"type": "new_draft", "draft": draft}
-    body = json.dumps(payload)
+    body = json.dumps(payload, ensure_ascii=False)
     with ws_lock:
         for ws in ws_connections.get(user_id, set()).copy():
             try:
@@ -157,7 +178,7 @@ def push_draft_to_ui(draft: dict) -> None:
 def push_message_failed_to_user(user_id: int, conversation_id: int, error_message: str) -> None:
     """Notify the user that sending a message failed (e.g. after background parse/expand)."""
     payload = {"type": "message_failed", "conversation_id": conversation_id, "error": error_message}
-    body = json.dumps(payload)
+    body = json.dumps(payload, ensure_ascii=False)
     with ws_lock:
         for ws in ws_connections.get(user_id, set()).copy():
             try:
@@ -169,7 +190,7 @@ def push_message_failed_to_user(user_id: int, conversation_id: int, error_messag
 def push_message_scheduled_to_user(user_id: int, conversation_id: int, data: dict) -> None:
     """Notify the user that their message was scheduled (so UI can show feedback)."""
     payload = {"type": "message_scheduled", "conversation_id": conversation_id, **data}
-    body = json.dumps(payload)
+    body = json.dumps(payload, ensure_ascii=False)
     with ws_lock:
         for ws in ws_connections.get(user_id, set()).copy():
             try:
@@ -470,7 +491,7 @@ def websocket(ws):
                 pass
     if not user:
         try:
-            ws.send(json.dumps({"type": "error", "error": "Authentication required"}))
+            ws.send(json.dumps({"type": "error", "error": "Authentication required"}, ensure_ascii=False))
         except Exception:
             pass
         return
@@ -488,7 +509,7 @@ def websocket(ws):
                 data = data.decode("utf-8", errors="ignore")
             if data and data.strip() == "ping":
                 try:
-                    ws.send(json.dumps({"type": "pong"}))
+                    ws.send(json.dumps({"type": "pong"}, ensure_ascii=False))
                 except Exception:
                     break
     except Exception:

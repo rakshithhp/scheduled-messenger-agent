@@ -29,6 +29,7 @@ def _clear_users_and_messaging():
     from auth.db import get_conn
     conn = get_conn()
     for table in (
+        "device_tokens",
         "follow_up_outcomes",
         "key_moments",
         "conversation_embeddings",
