@@ -118,7 +118,7 @@ final class WebSocketClient: ObservableObject {
             ? "New message"
             : (message.content ?? "")
         content.sound = .default
-        content.userInfo["conversation_id"] = message.conversation_id
+        content.userInfo = ["conversation_id": message.conversation_id]
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

@@ -25,10 +25,10 @@
 		4FB8F75B2F5948EA001B4FAD /* DraftsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F73C2F5948EA001B4FAD /* DraftsStore.swift */; };
 		4FB8F75C2F5948EA001B4FAD /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7402F5948EA001B4FAD /* ChatView.swift */; };
 		4FB8F75D2F5948EA001B4FAD /* MyContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7452F5948EA001B4FAD /* MyContactsView.swift */; };
-		4FB8F7612F600000001B4FAD /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7622F600000001B4FAD /* AccountView.swift */; };
 		4FB8F75E2F5948EA001B4FAD /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7392F5948EA001B4FAD /* AppDelegate.swift */; };
 		4FB8F75F2F5948EA001B4FAD /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7442F5948EA001B4FAD /* MainTabView.swift */; };
 		4FB8F7602F5948EA001B4FAD /* ScheduledMessengerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F74A2F5948EA001B4FAD /* ScheduledMessengerApp.swift */; };
+		4FB8F7612F600000001B4FAD /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB8F7622F600000001B4FAD /* AccountView.swift */; };
 		4FB8F7632F600001001B4FAD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FB8F7642F600001001B4FAD /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -52,10 +52,10 @@
 		4FB8F7442F5948EA001B4FAD /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		4FB8F7452F5948EA001B4FAD /* MyContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyContactsView.swift; sourceTree = "<group>"; };
 		4FB8F7462F5948EA001B4FAD /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
-		4FB8F7622F600000001B4FAD /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		4FB8F7482F5948EA001B4FAD /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		4FB8F7492F5948EA001B4FAD /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4FB8F74A2F5948EA001B4FAD /* ScheduledMessengerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessengerApp.swift; sourceTree = "<group>"; };
+		4FB8F7622F600000001B4FAD /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		4FB8F7642F600001001B4FAD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -77,14 +77,6 @@
 				4FB8F74B2F5948EA001B4FAD /* ScheduledMessenger */,
 				4FB8F6F72F594053001B4FAD /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		4FB8F7652F600001001B4FAD /* ScheduledMessengerApp */ = {
-			isa = PBXGroup;
-			children = (
-				4FB8F7642F600001001B4FAD /* Assets.xcassets */,
-			);
-			path = ScheduledMessengerApp;
 			sourceTree = "<group>";
 		};
 		4FB8F6F72F594053001B4FAD /* Products */ = {
@@ -148,6 +140,14 @@
 			name = ScheduledMessenger;
 			path = ../ScheduledMessenger;
 			sourceTree = SOURCE_ROOT;
+		};
+		4FB8F7652F600001001B4FAD /* ScheduledMessengerApp */ = {
+			isa = PBXGroup;
+			children = (
+				4FB8F7642F600001001B4FAD /* Assets.xcassets */,
+			);
+			path = ScheduledMessengerApp;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -375,6 +375,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GBYFK9FD29;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "AI Messenger";
@@ -412,6 +413,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GBYFK9FD29;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "AI Messenger";

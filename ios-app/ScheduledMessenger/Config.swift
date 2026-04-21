@@ -2,12 +2,12 @@ import Foundation
 
 /// Backend base URL. Change for local dev or production.
 enum Config {
-    /// e.g. "http://localhost:5034" or "https://your-app.elasticbeanstalk.com"
+    /// Local: "http://localhost:5034". For AWS, set #else to your EB URL.
     static var apiBaseURL: String {
         #if DEBUG
         return "http://localhost:5034"
         #else
-        return "https://your-app.elasticbeanstalk.com"
+        return "http://localhost:5034"
         #endif
     }
 
